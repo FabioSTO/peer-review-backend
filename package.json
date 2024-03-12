@@ -1,0 +1,14 @@
+{
+  "name": "peer-review-backend",
+  "version": "1.0.0",
+  "description": "Backend de peer-review",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Fabio Senande",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.3"
+  }
+}
