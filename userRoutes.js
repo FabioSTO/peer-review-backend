@@ -53,12 +53,13 @@ router.post("/registerAccount", (request, response) => {
           }
         });
       } else {
-        response.status(201).json({ message: "Usuario registrado correctamente" });
+        response.status(201).json({ message: "Usuario registrado correctamente sin tags" });
       }
       
     });
   });
 });
+
 
 router.post("/loginAccount", async (request, response) => {
   const { email, password } = request.body;
@@ -100,8 +101,8 @@ router.post("/loginAccount", async (request, response) => {
   });
 })
 
-router.get("/githubLoginCallback", async (request, response) => {
-  const code = request.query.code;
+router.post("/githubAddAccount", async (request, response) => {
+  const {code, userID} = request.body;
   
   try {
     const params = {
@@ -123,13 +124,59 @@ router.get("/githubLoginCallback", async (request, response) => {
 
     const access_token = data.access_token;
 
-    console.log(access_token);
+    // Obtener el nombre de usuario de GitHub
+    const githubUserRes = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `token ${access_token}`
+      }
+    });
 
-    response.redirect("http://localhost:3000/yourcapeer")
+    const userData = await githubUserRes.json();
+    const member_account = userData.login;
+
+    const insertGitMemberQuery = "INSERT INTO gitmember (userID, member_account, member_token) VALUES (?, ?, ?)";    
+    con.query(insertGitMemberQuery, [userID, member_account, access_token], (err) => {
+      if (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+          // Cuenta duplicada, informar al usuario
+          response.status(409).json({ message: "La cuenta de miembro ya existe.", member_account });
+        } else {
+          console.error(err);
+          response.status(500).json({ message: err.code });
+        }
+      } else {
+        response.status(200).json({ message: "Git Member guardado correctamente", member_account });
+      }
+    });
   } catch (error) {
-    console.error("Error al intercambiar código por token de acceso.", error);
     response.status(500).send("Error al intercambiar código por token de acceso.");
   }
 });
+
+router.get("/gitMemberData/:userID", async (request, response) => {
+  const userID = request.params.userID;
+
+  try {
+    const gitMemberEntries = await getGitMemberAccountAndMemberTokenByUserID(userID);
+    response.status(200).json(gitMemberEntries);
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ message: "Error al obtener las entradas del miembro." });
+  }
+});
+
+async function getGitMemberAccountAndMemberTokenByUserID(userID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT * FROM gitmember WHERE userID = ?";
+    con.query(selectQuery, [userID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+}
+
 
 module.exports = router;
