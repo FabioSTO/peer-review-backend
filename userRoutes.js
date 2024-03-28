@@ -5,6 +5,10 @@ const config = require("./config");
 const { hashPassword, comparePasswords } = require("./bcryptUtils");
 const con = require("./db");
 
+const { getGitMemberAccountAndMemberTokenByUserID, getOrgIDsByOrgName, getMemberIDsByOrgID,
+   getMemberOwnerIDByOrgIDAndMemberID, insertOrganizationQuery, insertMemberInOrganization,
+   getMemberDataByMemberAccount } = require('./databaseQueries')
+
 const accessTokenUrl = "https://github.com/login/oauth/access_token";
 const client_id = config.githubConfig.clientID;
 const client_secret = config.githubConfig.clientSecret;
@@ -161,22 +165,60 @@ router.get("/gitMemberData/:userID", async (request, response) => {
     response.status(200).json(gitMemberEntries);
   } catch (error) {
     console.error(error);
-    response.status(500).json({ message: "Error al obtener las entradas del miembro." });
+    response.status(500).json({ message: "Error al obtener las entries del miembro." });
   }
 });
 
-async function getGitMemberAccountAndMemberTokenByUserID(userID) {
-  return new Promise((resolve, reject) => {
-    const selectQuery = "SELECT * FROM gitmember WHERE userID = ?";
-    con.query(selectQuery, [userID], (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-}
+router.post("/addOrganization", async (request, response) => {
+  const {orgName, orgDesc, memberAccount} = request.body;
+  const memberID = 1;
 
+  /*try {
+    const memberData = await getMemberDataByMemberAccount(memberAccount);
+    console.log("Se encontró el miembro con el ID:", memberID);
+    if (memberData) {
+      memberID = memberData.memberID;
+      console.log("Se encontró el miembro con el ID:", memberID);
+      
+      // Aquí puedes usar memberID como necesites en tu lógica de aplicación
+    } else {
+      console.log("No se encontró ningún miembro con la cuenta:", memberAccount);
+    }
+  } catch (error) {
+    response.status(500).json({ message: "Error al obtener el memberID", error });
+  } */
+  
+
+  try {
+    const orgIDs = await getOrgIDsByOrgName(orgName);
+    if (orgIDs !== null) {
+        for (const orgID of orgIDs) {
+            const member_ids = await getMemberIDsByOrgID(orgID);
+            console.log(member_ids)
+            if (member_ids !== null) {
+                for (const member_id of member_ids) {
+                    if (member_id === memberID) {
+                        const is_owner = await getMemberOwnerIDByOrgIDAndMemberID(orgID, member_id);
+                        if (is_owner) {
+                            return response.status(409).json({ message: "Ya eres owner de una organización con ese nombre", orgName });
+                        } else {
+                            const insertedOrgID = await insertOrganizationQuery(orgName, orgDesc);
+                            await insertMemberInOrganization(insertedOrgID, memberID);
+                            return response.status(200).json({ message: "Organización insertada con éxito", orgName });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // If orgIDs is null or no matching memberID is found in any organization
+    const insertedOrgID = await insertOrganizationQuery(orgName, orgDesc);
+    await insertMemberInOrganization(insertedOrgID, memberID);
+    response.status(200).json({ message: "Organización insertada con éxito", orgName });
+} catch (error) {
+    response.status(500).json({ message: "Hubo un error en el servidor", error });
+}
+});
 
 module.exports = router;
