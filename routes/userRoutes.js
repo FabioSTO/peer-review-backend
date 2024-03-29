@@ -1,13 +1,13 @@
 const express = require("express");
 const fetch = require("node-fetch");
 const router = express.Router();
-const config = require("./config");
-const { hashPassword, comparePasswords } = require("./bcryptUtils");
-const con = require("./db");
+const config = require("../config");
+const { hashPassword, comparePasswords } = require("../bcryptUtils");
+const con = require("../db");
 
 const { getGitMemberAccountAndMemberTokenByUserID, getOrgIDsByOrgName, getMemberIDsByOrgID,
-   getMemberOwnerIDByOrgIDAndMemberID, insertOrganizationQuery, insertMemberInOrganization,
-   getMemberDataByMemberAccount } = require('./databaseQueries')
+  getIsOwnerByOrgNameAndMemberID, insertOrganizationQuery, insertMemberInOrganization,
+   getMemberDataByMemberAccount, getInvitationsByUserID } = require('../databaseQueries')
 
 const accessTokenUrl = "https://github.com/login/oauth/access_token";
 const client_id = config.githubConfig.clientID;
@@ -33,8 +33,6 @@ router.post("/registerAccount", (request, response) => {
       } 
       
       const userID = result.insertId;
-
-      console.log(userID);
 
       if (!userID) {
         console.error("Fallo al obtener el userID");
@@ -105,7 +103,7 @@ router.post("/loginAccount", async (request, response) => {
   });
 })
 
-router.post("/githubAddAccount", async (request, response) => {
+router.post("/gitmembers", async (request, response) => {
   const {code, userID} = request.body;
   
   try {
@@ -157,7 +155,7 @@ router.post("/githubAddAccount", async (request, response) => {
   }
 });
 
-router.get("/gitMemberData/:userID", async (request, response) => {
+router.get("/:userID/gitmembers", async (request, response) => {
   const userID = request.params.userID;
 
   try {
@@ -169,56 +167,20 @@ router.get("/gitMemberData/:userID", async (request, response) => {
   }
 });
 
-router.post("/addOrganization", async (request, response) => {
-  const {orgName, orgDesc, memberAccount} = request.body;
-  const memberID = 1;
-
-  /*try {
-    const memberData = await getMemberDataByMemberAccount(memberAccount);
-    console.log("Se encontró el miembro con el ID:", memberID);
-    if (memberData) {
-      memberID = memberData.memberID;
-      console.log("Se encontró el miembro con el ID:", memberID);
-      
-      // Aquí puedes usar memberID como necesites en tu lógica de aplicación
-    } else {
-      console.log("No se encontró ningún miembro con la cuenta:", memberAccount);
-    }
-  } catch (error) {
-    response.status(500).json({ message: "Error al obtener el memberID", error });
-  } */
-  
+router.get("/:userID/invitations", async (request, response) => {
+  const userID = request.params.userID;
 
   try {
-    const orgIDs = await getOrgIDsByOrgName(orgName);
-    if (orgIDs !== null) {
-        for (const orgID of orgIDs) {
-            const member_ids = await getMemberIDsByOrgID(orgID);
-            console.log(member_ids)
-            if (member_ids !== null) {
-                for (const member_id of member_ids) {
-                    if (member_id === memberID) {
-                        const is_owner = await getMemberOwnerIDByOrgIDAndMemberID(orgID, member_id);
-                        if (is_owner) {
-                            return response.status(409).json({ message: "Ya eres owner de una organización con ese nombre", orgName });
-                        } else {
-                            const insertedOrgID = await insertOrganizationQuery(orgName, orgDesc);
-                            await insertMemberInOrganization(insertedOrgID, memberID);
-                            return response.status(200).json({ message: "Organización insertada con éxito", orgName });
-                        }
-                    }
-                }
-            }
-        }
+    const invitations = await getInvitationsByUserID(userID)
+    if (invitations) {
+      response.status(200).json(invitations);
+    } else {
+      response.status(404).json({ message: "No tienes ninguna invitación.", userID });
     }
-
-    // If orgIDs is null or no matching memberID is found in any organization
-    const insertedOrgID = await insertOrganizationQuery(orgName, orgDesc);
-    await insertMemberInOrganization(insertedOrgID, memberID);
-    response.status(200).json({ message: "Organización insertada con éxito", orgName });
-} catch (error) {
-    response.status(500).json({ message: "Hubo un error en el servidor", error });
-}
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ message: "Error al obtener las invitaciones del usuario." });
+  }
 });
 
 module.exports = router;
