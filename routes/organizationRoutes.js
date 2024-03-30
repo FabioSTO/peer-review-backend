@@ -5,7 +5,7 @@ const config = require("../config");
 const { hashPassword, comparePasswords } = require("../bcryptUtils");
 const con = require("../db");
 
-const { getGitMemberAccountAndMemberTokenByUserID, getOrgIDsByOrgName, getMemberIDsByOrgID,
+const { getGitMemberAccountAndMemberTokenByUserID, getOrgIDsByOrgName, getMembersByOrgID,
   getIsOwnerByOrgNameAndMemberID, insertOrganizationQuery, insertMemberInOrganization,
    getMemberDataByMemberAccount, getOrganizationsByUserID, insertInvitationsByOrgName, respondInvitation } = require('../databaseQueries')
 
@@ -86,6 +86,18 @@ router.post("/:orgName/invitations/:member_account", async (request, response) =
       message: "Hubo un error al responder a la invitación.", 
       error: error 
     });
+  }
+});
+
+router.get("/:orgName/gitmembers", async (request, response) => {
+  const orgName = request.params.orgName;
+
+  try {
+    const orgData = await getOrgIDsByOrgName(orgName);
+    const members = await getMembersByOrgID(orgData.orgID);
+    response.status(200).json(members);
+  } catch (error) {
+    response.status(500).json({ message: "Hubo un error al añadir la organización", error });
   }
 });
 

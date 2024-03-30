@@ -36,9 +36,9 @@ async function getOrgIDsByOrgName(orgName) {
   });
 };
 
-async function getMemberIDsByOrgID(orgID) {
+async function getMembersByOrgID(orgID) {
   return new Promise((resolve, reject) => {
-    const selectQuery = "SELECT memberID FROM organization_member WHERE orgID = ? AND is_active = TRUE";
+    const selectQuery = "SELECT om.memberID, join_date, member_account, is_owner, is_admin, is_super_reviewer FROM organization_member om JOIN gitmember g ON om.memberID = g.memberID WHERE orgID = ? AND is_active = TRUE";
     con.query(selectQuery, [orgID], (err, rows) => {
       if (err) {
         reject(err);
@@ -85,7 +85,7 @@ async function getIsOwnerByOrgNameAndMemberID(orgName, member_id) {
 
 async function insertOrganizationQuery(orgName, orgDesc) {
   return new Promise((resolve, reject) => {
-    const insertOrganizationQuery = "INSERT INTO organization (orgname, org_desc, org_creation_date) VALUES (?, ?, CURDATE())"
+    const insertOrganizationQuery = "INSERT INTO organization (orgname, org_desc, org_creation_date) VALUES (?, ?, DATE(NOW()))"
     con.query(insertOrganizationQuery, [orgName, orgDesc], (err, result) => {
       if (err) {
         reject(err);
@@ -98,7 +98,7 @@ async function insertOrganizationQuery(orgName, orgDesc) {
 
 async function insertMemberInOrganization(orgID, member_id, is_owner, is_admin, is_super_reviewer) {
   return new Promise((resolve, reject) => {
-    const insertMemberInOrganizationQuery = "INSERT INTO organization_member (orgID, memberID, join_date, is_owner, is_admin, is_super_reviewer) VALUES (?, ?, CURDATE(), ?, ?, ?)"
+    const insertMemberInOrganizationQuery = "INSERT INTO organization_member (orgID, memberID, join_date, is_owner, is_admin, is_super_reviewer) VALUES (?, ?, DATE(NOW()), ?, ?, ?)"
     con.query(insertMemberInOrganizationQuery, [orgID, member_id, is_owner, is_admin, is_super_reviewer], (err) => {
       if (err) {
         reject(err);
@@ -224,10 +224,49 @@ async function respondInvitation(orgID, memberID, responseValue) {
   });
 };
 
+async function insertProjectQuery(orgID, proName, proDesc) {
+  return new Promise((resolve, reject) => {
+    const insertProjectQuery = "INSERT INTO project (orgID, proname, pro_desc, pro_creation_date) VALUES (?, ?, ?, DATE(NOW()))"
+    con.query(insertProjectQuery, [orgID, proName, proDesc], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId); // Te devuelve el ID
+      }
+    });
+  });
+};
+
+async function insertMemberInProject(proID, member_id, is_admin, is_reviewer, is_submitter) {
+  return new Promise((resolve, reject) => {
+    const insertMemberInProjectQuery = "INSERT INTO project_member (proID, memberID, assign_date, is_admin, is_reviewer, is_submitter) VALUES (?, ?, DATE(NOW()), ?, ?, ?)"
+    con.query(insertMemberInProjectQuery, [proID, member_id, is_admin, is_reviewer, is_submitter], (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+};
+
+async function getProjectsByOrgID(orgID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT proname, pro_desc, pro_creation_date, pm.memberID, member_account, orgname FROM project p JOIN project_member pm ON p.proID = pm.proID JOIN gitmember g ON pm.memberID = g.memberID JOIN organization o ON p.orgID = o.orgID WHERE p.orgID = ? AND is_active = TRUE";
+    con.query(selectQuery, [orgID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      };
+    });
+  });
+}
+
 module.exports = {
   getGitMemberAccountAndMemberTokenByUserID,
   getOrgIDsByOrgName,
-  getMemberIDsByOrgID,
+  getMembersByOrgID,
   getIsOwnerByOrgNameAndMemberID,
   insertOrganizationQuery,
   insertMemberInOrganization,
@@ -235,5 +274,8 @@ module.exports = {
   getOrganizationsByUserID,
   insertInvitationsByOrgName,
   getInvitationsByUserID,
-  respondInvitation
+  respondInvitation,
+  insertProjectQuery,
+  insertMemberInProject, 
+  getProjectsByOrgID
 };

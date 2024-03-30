@@ -5,7 +5,7 @@ const config = require("../config");
 const { hashPassword, comparePasswords } = require("../bcryptUtils");
 const con = require("../db");
 
-const { getGitMemberAccountAndMemberTokenByUserID, getOrgIDsByOrgName, getMemberIDsByOrgID,
+const { getGitMemberAccountAndMemberTokenByUserID, getOrgIDsByOrgName, getMembersByOrgID,
   getIsOwnerByOrgNameAndMemberID, insertOrganizationQuery, insertMemberInOrganization,
    getMemberDataByMemberAccount, getInvitationsByUserID } = require('../databaseQueries')
 
