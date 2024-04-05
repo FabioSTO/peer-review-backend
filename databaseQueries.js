@@ -263,6 +263,44 @@ async function getProjectsByOrgID(orgID) {
   });
 }
 
+///////////////////////////// PROYECTOS ///////////////////////////////
+
+async function getProIDsByProName(proName) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT proID FROM project WHERE proname = ?";
+    con.query(selectQuery, [proName], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        // Si no encuentra proID, devuelve null
+        if (rows.length === 0) {
+          resolve(null);
+        } else {
+          // Si encuentra un proID, lo devuelve
+          resolve(rows[0]);
+        }
+      };
+    });
+  });
+};
+
+async function getMembersByProID(proID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT pm.memberID, assign_date, member_account, is_admin, is_reviewer, is_submitter FROM project_member pm JOIN gitmember g ON pm.memberID = g.memberID WHERE proID = ? AND is_active = TRUE";
+    con.query(selectQuery, [proID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (rows.length === 0) {
+          resolve(null);
+        } else {
+          resolve(rows);
+        }
+      };
+    });
+  });
+}
+
 module.exports = {
   getGitMemberAccountAndMemberTokenByUserID,
   getOrgIDsByOrgName,
@@ -277,5 +315,7 @@ module.exports = {
   respondInvitation,
   insertProjectQuery,
   insertMemberInProject, 
-  getProjectsByOrgID
+  getProjectsByOrgID,
+  getProIDsByProName,
+  getMembersByProID
 };
