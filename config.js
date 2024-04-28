@@ -11,5 +11,8 @@ module.exports = {
   githubConfig: {
     clientID: process.env.GITHUB_CLIENT_ID || "<Github Client ID>",
     clientSecret: process.env.GITHUB_CLIENT_SECRET || "<Github Client Secret>",
+  },
+  jwtConfig: {
+    jwtToken: process.env.JWT_SECRET_KEY || "<JWT Secret Key>",
   }
 };
