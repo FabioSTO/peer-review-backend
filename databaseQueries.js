@@ -301,6 +301,45 @@ async function getMembersByProID(proID) {
   });
 }
 
+async function insertTaskQuery(proID, taskName, taskDesc) {
+  return new Promise((resolve, reject) => {
+    const insertTaskQuery = "INSERT INTO task (proID, taskname, task_desc, task_creation_date) VALUES (?, ?, ?, DATE(NOW()))"
+    con.query(insertTaskQuery, [proID, taskName, taskDesc], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId); // Te devuelve el ID
+      }
+    });
+  });
+};
+
+async function insertMemberInTask(taskID, member_id, is_creator, is_assigned) {
+  return new Promise((resolve, reject) => {
+    const insertMemberInProjectQuery = "INSERT INTO task_member (taskID, memberID, assign_date, is_creator, is_assigned) VALUES (?, ?, DATE(NOW()), ?, ?)"
+    con.query(insertMemberInProjectQuery, [taskID, member_id, is_creator, is_assigned], (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+};
+
+async function getTasksByProID(proID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT t.taskID AS task_ID, taskname, task_desc, task_state, task_creation_date, creator.memberID AS creator_memberID, creatorAccount.member_account AS creator_member_account, assigned.memberID AS assigned_memberID, assignedAccount.member_account AS assigned_member_account FROM task t JOIN task_member creator ON t.taskID = creator.taskID AND creator.is_creator = 1 JOIN gitmember creatorAccount ON creator.memberID = creatorAccount.memberID JOIN task_member assigned ON t.taskID = assigned.taskID AND assigned.is_assigned = 1 JOIN gitmember assignedAccount ON assigned.memberID = assignedAccount.memberID WHERE t.proID = ?";
+    con.query(selectQuery, [proID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      };
+    });
+  });
+}
+
 module.exports = {
   getGitMemberAccountAndMemberTokenByUserID,
   getOrgIDsByOrgName,
@@ -317,5 +356,8 @@ module.exports = {
   insertMemberInProject, 
   getProjectsByOrgID,
   getProIDsByProName,
-  getMembersByProID
+  getMembersByProID,
+  insertTaskQuery,
+  insertMemberInTask,
+  getTasksByProID
 };

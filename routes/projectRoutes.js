@@ -7,7 +7,8 @@ const con = require("../db");
 const jwt = require('jsonwebtoken');
 
 const { getMemberDataByMemberAccount, insertProjectQuery, insertMemberInProject, getOrgIDsByOrgName,
-   getProjectsByOrgID, getProIDsByProName, getMembersByProID } = require('../databaseQueries')
+   getProjectsByOrgID, getProIDsByProName, getMembersByProID, insertTaskQuery, insertMemberInTask,
+   getTasksByProID } = require('../databaseQueries')
 
 const jwt_secret_key = config.jwtConfig.jwtToken;
 
@@ -60,7 +61,7 @@ router.get("/:orgName", async (request, response) => {
       }
     });
   } catch (error) {
-    response.status(500).json({ message: "Error al obtener las invitaciones del usuario." });
+    response.status(500).json({ message: "Error al obtener los proyectos." });
   }
 });
 
@@ -108,6 +109,66 @@ router.post("/:proName/gitmembers", async (request, response) => {
     });
   } catch (error) {
     response.status(500).json({ message: "Hubo un error al invitar a los miembros" });
+  }
+});
+
+router.post("/:proName/tasks", async (request, response) => {
+  const proName = request.params.proName;
+  const {taskName, taskDesc, assignMember, creatorMember} = request.body;
+
+  try {
+    const token = request.headers.authorization.split(' ')[1];
+
+    jwt.verify(token, jwt_secret_key, async (err, decodedToken) => {
+      if (err) {
+        return response.status(401).json({ message: 'Token inválido' });
+      } else {
+        const memberData = await getMemberDataByMemberAccount(assignMember);
+        const memberDataAdmin = await getMemberDataByMemberAccount(creatorMember);
+        const proData = await getProIDsByProName(proName);
+        if (memberData && proData) {
+          const memberID = memberData.memberID;
+          const memberAdminID = memberDataAdmin.memberID;
+          const insertedTaskID = await insertTaskQuery(proData.proID, taskName, taskDesc);
+          if (memberID === memberAdminID) {
+            await insertMemberInTask(insertedTaskID, memberID, true, true); // El creador se asigna como admin
+          }
+          await insertMemberInTask(insertedTaskID, memberAdminID, true, false); // Insertamos el creador
+          await insertMemberInTask(insertedTaskID, memberID, false, true); // Insertamos el asignado
+          return response.status(200).json({ message: "Tarea insertada con éxito", taskName });
+        } else {
+          response.status(404).json({ message: "Usuario no encontrado", assignMember });
+        }
+      }
+    });
+  } catch (error) {
+    response.status(500).json({ message: "Hubo un error al añadir la tarea", error });
+}
+});
+
+router.get("/:proName/tasks", async (request, response) => {
+  const proName = request.params.proName;
+
+  try {
+
+    const token = request.headers.authorization.split(' ')[1];
+
+    jwt.verify(token, jwt_secret_key, async (err, decodedToken) => {
+      if (err) {
+        return response.status(401).json({ message: 'Token inválido' });
+      } else {
+        const proData = await getProIDsByProName(proName);
+        const tasks = await getTasksByProID(proData.proID);
+        
+        if (tasks) {
+          response.status(200).json(tasks);
+        } else {
+          response.status(404).json({ message: "No hay ningún task.", proName });
+        }
+      }
+    });
+  } catch (error) {
+    response.status(500).json({ message: "Error al obtener las tareas." });
   }
 });
 

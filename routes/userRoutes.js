@@ -153,7 +153,7 @@ router.post("/gitmembers", async (request, response) => {
           if (err) {
             if (err.code === 'ER_DUP_ENTRY') {
               // Cuenta duplicada, informar al usuario
-              response.status(409).json({ message: "La cuenta de miembro ya existe.", member_account });
+              response.status(200).json({ message: "La cuenta de miembro ya existe.", member_account });
             } else {
               console.error(err);
               response.status(500).json({ message: err.code });
