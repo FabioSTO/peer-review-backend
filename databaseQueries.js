@@ -237,10 +237,10 @@ async function insertProjectQuery(orgID, proName, proDesc) {
   });
 };
 
-async function insertMemberInProject(proID, member_id, is_admin, is_reviewer, is_submitter) {
+async function insertMemberInProject(proID, member_id, is_admin, is_reviewer) {
   return new Promise((resolve, reject) => {
-    const insertMemberInProjectQuery = "INSERT INTO project_member (proID, memberID, assign_date, is_admin, is_reviewer, is_submitter) VALUES (?, ?, DATE(NOW()), ?, ?, ?)"
-    con.query(insertMemberInProjectQuery, [proID, member_id, is_admin, is_reviewer, is_submitter], (err) => {
+    const insertMemberInProjectQuery = "INSERT INTO project_member (proID, memberID, assign_date, is_admin, is_reviewer) VALUES (?, ?, DATE(NOW()), ?, ?)"
+    con.query(insertMemberInProjectQuery, [proID, member_id, is_admin, is_reviewer], (err) => {
       if (err) {
         reject(err);
       } else {
@@ -286,7 +286,7 @@ async function getProIDsByProName(proName) {
 
 async function getMembersByProID(proID) {
   return new Promise((resolve, reject) => {
-    const selectQuery = "SELECT pm.memberID, assign_date, member_account, is_admin, is_reviewer, is_submitter FROM project_member pm JOIN gitmember g ON pm.memberID = g.memberID WHERE proID = ? AND is_active = TRUE";
+    const selectQuery = "SELECT pm.memberID, assign_date, member_account, is_admin, is_reviewer FROM project_member pm JOIN gitmember g ON pm.memberID = g.memberID WHERE proID = ? AND is_active = TRUE";
     con.query(selectQuery, [proID], (err, rows) => {
       if (err) {
         reject(err);
@@ -340,6 +340,294 @@ async function getTasksByProID(proID) {
   });
 }
 
+///////////////////////////// TASKS ///////////////////////////////
+
+async function getMembersByTaskID(taskID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT tm.memberID, assign_date, member_account, is_creator, is_assigned FROM task_member tm JOIN gitmember g ON tm.memberID = g.memberID WHERE taskID = ?";
+    con.query(selectQuery, [taskID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (rows.length === 0) {
+          resolve(null);
+        } else {
+          resolve(rows);
+        }
+      };
+    });
+  });
+}
+
+///////////////////////////// REVIEWS ///////////////////////////////
+
+async function insertReview(taskID, title, desc, scope, image, reviewContent, contentType, memberID) {
+  return new Promise((resolve, reject) => {
+    const insertReviewQuery = "INSERT INTO review (taskID, reviewtitle, review_desc, review_scope, review_image, review_content, review_content_type, review_owner, review_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, DATE(NOW()))"
+    con.query(insertReviewQuery, [taskID, title, desc, scope, image, reviewContent, contentType, memberID], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId); // Te devuelve el ID
+      }
+    });
+  });
+};
+
+async function insertReviewTags(tags, reviewID) {
+  return new Promise((resolve, reject) => {
+
+    const tagInserts = tags.map(tag => {
+      return [reviewID, tag];
+    });
+
+    const sqlUserTags = "INSERT INTO review_tags (reviewID, tag) VALUES ?";
+    con.query(sqlUserTags, [tagInserts], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result);
+      }
+    });
+  });
+};
+
+async function getSubmissionsByMember(memberID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT reviewID, taskname, proname, orgname, r.taskID, p.proID, o.orgID, reviewtitle, review_desc, review_scope, review_content, review_content_type, review_image, review_date, is_closed, review_owner from review r JOIN task t on r.taskID=t.taskID JOIN project p on t.proID=p.proID JOIN organization o on p.orgID=o.orgID where review_owner = ?;";
+    
+    con.query(selectQuery, [memberID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (rows.length === 0) {
+          resolve(null);
+        } else {
+          const reviewPromises = rows.map(review => {
+            return new Promise((resolve, reject) => {
+              const tagsQuery = "SELECT tagID, tag from review_tags where reviewID = ?";
+              con.query(tagsQuery, [review.reviewID], (err, tagRows) => {
+                if (err) {
+                  reject(err);
+                } else {
+                  if (tagRows.length === 0) {
+                    resolve(review);
+                  } else {
+                    review.tags = tagRows.map(row => ({
+                      tagID: row.tagID,
+                      tag: row.tag
+                    }));
+                    resolve(review);
+                  }
+                };
+              });
+            });
+          });
+          Promise.all(reviewPromises)
+            .then(reviewsWithTags => {
+              resolve(reviewsWithTags);
+            })
+            .catch(error => {
+              reject(error);
+            });
+        }
+      };
+    });
+  });
+}
+
+async function getSuperReviewedOrganizationsByMemberID(memberID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT is_super_reviewer, is_active, orgID FROM organization_member WHERE memberID = ? AND is_super_reviewer != 0"
+    con.query(selectQuery, [memberID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (rows.length === 0) {
+          resolve(null);
+        } else {
+          resolve(rows);
+        }
+      };
+    });
+  });
+};
+
+async function getUserTagsByMemberID(memberID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT tag, g.userID FROM user u JOIN gitmember g on u.userID=g.userID JOIN user_tags ut on g.userID = ut.userID where memberID = ?"
+    con.query(selectQuery, [memberID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (rows.length === 0) {
+          resolve(null);
+        } else {
+          resolve(rows);
+        }
+      };
+    });
+  });
+};
+
+async function getSuperReviewedReviews(tags, orgIDs, memberID) {
+  return new Promise((resolve, reject) => {
+
+    const orgIDPlaceholders = orgIDs.map(() => '?').join(',');
+    const tagsPlaceholders = tags.map(() => '?').join(',');
+
+
+    const selectQuery = `
+      SELECT 
+        DISTINCT reviewID, taskname, proname, orgname, r.taskID, p.proID, o.orgID, 
+        reviewtitle, review_desc, review_scope, review_content, 
+        review_content_type, review_image, review_date, is_closed, review_owner 
+      FROM review r 
+      JOIN task t ON r.taskID = t.taskID 
+      JOIN project p ON t.proID = p.proID 
+      JOIN organization o ON p.orgID = o.orgID 
+      JOIN organization_member om ON o.orgID = om.orgID
+      JOIN project_member pm ON p.proID = pm.proID 
+      WHERE om.is_active = 1 AND pm.is_active = 1
+      AND review_owner != ?
+      AND r.is_closed != 1
+      AND (
+      (review_scope = 'Task' AND (
+        t.taskID IN (
+          SELECT taskID FROM task_member WHERE memberID = ? AND ((is_creator = 1 AND is_assigned = 0) OR (is_creator = 0 AND is_assigned = 0))
+        )
+      ))
+      OR (review_scope = 'Project'
+        AND p.proID IN (
+        SELECT proID FROM project_member WHERE memberID = ? AND (is_reviewer = 1 OR is_admin = 1 OR (
+          t.taskID IN (
+            SELECT taskID FROM task_member WHERE memberID = ? AND ((is_creator = 1 AND is_assigned = 0) OR (is_creator = 0 AND is_assigned = 0))
+          )
+        )))
+        ) 
+      OR (o.orgID IN (${orgIDPlaceholders}) 
+        AND r.reviewID IN (
+        SELECT reviewID FROM review_tags WHERE tag IN (${tagsPlaceholders})
+      ))
+      );
+    `;
+
+    con.query(selectQuery, [memberID, memberID, memberID, memberID, ...orgIDs, ...tags], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (rows.length === 0) {
+          resolve(null);
+        } else {
+          const reviewPromises = rows.map(review => {
+            return new Promise((resolve, reject) => {
+              const tagsQuery = "SELECT tagID, tag from review_tags where reviewID = ?";
+              con.query(tagsQuery, [review.reviewID], (err, tagRows) => {
+                if (err) {
+                  reject(err);
+                } else {
+                  if (tagRows.length === 0) {
+                    resolve(review);
+                  } else {
+                    review.tags = tagRows.map(row => ({
+                      tagID: row.tagID,
+                      tag: row.tag
+                    }));
+                    resolve(review);
+                  }
+                };
+              });
+            });
+          });
+          Promise.all(reviewPromises)
+            .then(reviewsWithTags => {
+              resolve(reviewsWithTags);
+            })
+            .catch(error => {
+              reject(error);
+            });
+        }
+      };
+    });
+  });
+}
+
+async function getReviews(memberID) {
+  return new Promise((resolve, reject) => {
+
+    const selectQuery = `
+      SELECT 
+        DISTINCT reviewID, taskname, proname, orgname, r.taskID, p.proID, o.orgID, 
+        reviewtitle, review_desc, review_scope, review_content, 
+        review_content_type, review_image, review_date, is_closed, review_owner 
+      FROM review r 
+      JOIN task t ON r.taskID = t.taskID 
+      JOIN project p ON t.proID = p.proID 
+      JOIN organization o ON p.orgID = o.orgID 
+      JOIN organization_member om ON o.orgID = om.orgID
+      JOIN project_member pm ON p.proID = pm.proID 
+      WHERE om.is_active = 1 AND pm.is_active = 1
+      AND review_owner != ?
+      AND r.is_closed != 1
+      AND ((review_scope = 'Task'
+      AND (
+        t.taskID IN (
+          SELECT taskID FROM task_member WHERE memberID = ? AND ((is_creator = 1 AND is_assigned = 0) OR (is_creator = 0 AND is_assigned = 0))
+        )
+      ))
+      OR (review_scope = 'Project'
+        AND p.proID IN (
+        SELECT proID FROM project_member WHERE memberID = ? AND (is_reviewer = 1 OR is_admin = 1 OR (
+          t.taskID IN (
+            SELECT taskID FROM task_member WHERE memberID = ? AND ((is_creator = 1 AND is_assigned = 0) OR (is_creator = 0 AND is_assigned = 0))
+          )
+        )))
+        ) 
+      );
+    `;
+
+    con.query(selectQuery, [memberID, memberID, memberID, memberID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        if (rows.length === 0) {
+          resolve(null);
+        } else {
+          const reviewPromises = rows.map(review => {
+            return new Promise((resolve, reject) => {
+              const tagsQuery = "SELECT tagID, tag from review_tags where reviewID = ?";
+              con.query(tagsQuery, [review.reviewID], (err, tagRows) => {
+                if (err) {
+                  reject(err);
+                } else {
+                  if (tagRows.length === 0) {
+                    resolve(review);
+                  } else {
+                    review.tags = tagRows.map(row => ({
+                      tagID: row.tagID,
+                      tag: row.tag
+                    }));
+                    resolve(review);
+                  }
+                };
+              });
+            });
+          });
+          Promise.all(reviewPromises)
+            .then(reviewsWithTags => {
+              resolve(reviewsWithTags);
+            })
+            .catch(error => {
+              reject(error);
+            });
+        }
+      };
+    });
+  });
+}
+
+
+
 module.exports = {
   getGitMemberAccountAndMemberTokenByUserID,
   getOrgIDsByOrgName,
@@ -359,5 +647,14 @@ module.exports = {
   getMembersByProID,
   insertTaskQuery,
   insertMemberInTask,
-  getTasksByProID
+  getTasksByProID,
+  getMembersByTaskID,
+  insertReview,
+  insertReviewTags,
+  getSubmissionsByMember,
+  getSuperReviewedOrganizationsByMemberID,
+  getUserTagsByMemberID,
+  getSuperReviewedReviews,
+  getReviews
 };
+

@@ -27,7 +27,7 @@ router.post("/", async (request, response) => {
         if (memberData && orgData) {
           const memberID = memberData.memberID;
           const insertedProID = await insertProjectQuery(orgData.orgID, proName, proDesc);
-          await insertMemberInProject(insertedProID, memberID, true, false, false); // El admin solo es ADMIN de primeras
+          await insertMemberInProject(insertedProID, memberID, true, false); // El admin solo es ADMIN de primeras
           return response.status(200).json({ message: "Proyecto insertado con éxito", proName });
         } else {
           response.status(404).json({ message: "Usuario no encontrado", adminMember });
@@ -101,7 +101,7 @@ router.post("/:proName/gitmembers", async (request, response) => {
         await Promise.all(members.map(async (member) => {
           const memberData = await getMemberDataByMemberAccount(member);
           const memberID = memberData.memberID;
-          await insertMemberInProject(proData.proID, memberID, false, false, false);
+          await insertMemberInProject(proData.proID, memberID, false, true); // Es reviewer de primeras
         }));
         
         return response.status(200).json({ message: "Miembros añadidos con éxito", proName });
@@ -132,9 +132,10 @@ router.post("/:proName/tasks", async (request, response) => {
           const insertedTaskID = await insertTaskQuery(proData.proID, taskName, taskDesc);
           if (memberID === memberAdminID) {
             await insertMemberInTask(insertedTaskID, memberID, true, true); // El creador se asigna como admin
+          } else {
+            await insertMemberInTask(insertedTaskID, memberAdminID, true, false); // Insertamos el creador
+            await insertMemberInTask(insertedTaskID, memberID, false, true); // Insertamos el asignado
           }
-          await insertMemberInTask(insertedTaskID, memberAdminID, true, false); // Insertamos el creador
-          await insertMemberInTask(insertedTaskID, memberID, false, true); // Insertamos el asignado
           return response.status(200).json({ message: "Tarea insertada con éxito", taskName });
         } else {
           response.status(404).json({ message: "Usuario no encontrado", assignMember });
