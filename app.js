@@ -5,12 +5,14 @@ const organizationRoutes = require("./routes/organizationRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const taskRoutes = require("./routes/taskRoutes");
 const gitMembersRoutes = require("./routes/gitMembersRoutes");
+const reviewRoutes = require("./routes/reviewRoutes");
 
 app.use("/users", userRoutes);
 app.use("/organizations", organizationRoutes);
 app.use("/projects", projectRoutes);
 app.use("/tasks", taskRoutes);
 app.use("/gitMembers", gitMembersRoutes);
+app.use("/reviews", reviewRoutes);
 
 app.get("/status", (request, response) => {
   const status = {

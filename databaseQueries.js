@@ -394,7 +394,7 @@ async function insertReviewTags(tags, reviewID) {
 
 async function getSubmissionsByMember(memberID) {
   return new Promise((resolve, reject) => {
-    const selectQuery = "SELECT reviewID, taskname, proname, orgname, r.taskID, p.proID, o.orgID, reviewtitle, review_desc, review_scope, review_content, review_content_type, review_image, review_date, is_closed, review_owner from review r JOIN task t on r.taskID=t.taskID JOIN project p on t.proID=p.proID JOIN organization o on p.orgID=o.orgID where review_owner = ?;";
+    const selectQuery = "SELECT reviewID, member_account, taskname, proname, orgname, r.taskID, p.proID, o.orgID, reviewtitle, review_desc, review_scope, review_content, review_content_type, review_image, review_date, is_closed, review_owner from review r JOIN task t on r.taskID=t.taskID JOIN project p on t.proID=p.proID JOIN organization o on p.orgID=o.orgID JOIN gitmember g on r.review_owner = g.memberID where review_owner = ?;";
     
     con.query(selectQuery, [memberID], (err, rows) => {
       if (err) {
@@ -481,13 +481,14 @@ async function getSuperReviewedReviews(tags, orgIDs, memberID) {
       SELECT 
         DISTINCT reviewID, taskname, proname, orgname, r.taskID, p.proID, o.orgID, 
         reviewtitle, review_desc, review_scope, review_content, 
-        review_content_type, review_image, review_date, is_closed, review_owner 
+        review_content_type, review_image, review_date, is_closed, review_owner, member_account
       FROM review r 
       JOIN task t ON r.taskID = t.taskID 
       JOIN project p ON t.proID = p.proID 
       JOIN organization o ON p.orgID = o.orgID 
       JOIN organization_member om ON o.orgID = om.orgID
       JOIN project_member pm ON p.proID = pm.proID 
+      JOIN gitmember g ON r.review_owner = g.memberID
       WHERE om.is_active = 1 AND pm.is_active = 1
       AND review_owner != ?
       AND r.is_closed != 1
@@ -559,13 +560,14 @@ async function getReviews(memberID) {
       SELECT 
         DISTINCT reviewID, taskname, proname, orgname, r.taskID, p.proID, o.orgID, 
         reviewtitle, review_desc, review_scope, review_content, 
-        review_content_type, review_image, review_date, is_closed, review_owner 
+        review_content_type, review_image, review_date, is_closed, review_owner, member_account
       FROM review r 
       JOIN task t ON r.taskID = t.taskID 
       JOIN project p ON t.proID = p.proID 
       JOIN organization o ON p.orgID = o.orgID 
       JOIN organization_member om ON o.orgID = om.orgID
       JOIN project_member pm ON p.proID = pm.proID 
+      JOIN gitmember g ON r.review_owner = g.memberID
       WHERE om.is_active = 1 AND pm.is_active = 1
       AND review_owner != ?
       AND r.is_closed != 1
@@ -626,7 +628,33 @@ async function getReviews(memberID) {
   });
 }
 
+///////////////////////////// COMMENTS ///////////////////////////////
 
+async function insertComment(memberID, reviewID, comment) {
+  return new Promise((resolve, reject) => {
+    const insertCommentQuery = "INSERT INTO comment (comment_owner, comment_content, reviewID, comment_date) VALUES (?, ?, ?, NOW())"
+    con.query(insertCommentQuery, [memberID, comment, reviewID], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId); 
+      }
+    });
+  });
+};
+
+async function getCommentsByReviewID(reviewID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT comment_owner, member_account, comment_content, comment_date FROM comment c JOIN review r on c.reviewID = r.reviewID JOIN gitmember g on c.comment_owner = g.memberID WHERE c.reviewID = ? ORDER BY comment_date ASC;";
+    con.query(selectQuery, [reviewID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows.reverse());
+      };
+    });
+  });
+}
 
 module.exports = {
   getGitMemberAccountAndMemberTokenByUserID,
@@ -655,6 +683,8 @@ module.exports = {
   getSuperReviewedOrganizationsByMemberID,
   getUserTagsByMemberID,
   getSuperReviewedReviews,
-  getReviews
+  getReviews,
+  insertComment,
+  getCommentsByReviewID
 };
 

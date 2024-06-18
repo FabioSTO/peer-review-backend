@@ -7,7 +7,7 @@ const con = require("../db");
 const jwt = require('jsonwebtoken');
 
 const { getMemberDataByMemberAccount, getSubmissionsByMember, getSuperReviewedOrganizationsByMemberID, getUserTagsByMemberID, getSuperReviewedReviews,
-  getReviews } = require('../databaseQueries')
+  getReviews, getCommentsByReviewID } = require('../databaseQueries')
 
 const jwt_secret_key = config.jwtConfig.jwtToken;
 
@@ -23,7 +23,6 @@ router.get("/:memberAccount/repositories", async (request, response) => {
         return response.status(401).json({ message: 'Token inválido' });
       } else {
         const memberData = await getMemberDataByMemberAccount(memberAccount);
-        console.log(memberData);
         const memberToken = memberData.member_token;
         const getRepositories = await fetch(`https://api.github.com/users/${memberAccount}/repos` , {
           headers: {
@@ -117,6 +116,7 @@ router.get("/:memberAccount/repositories", async (request, response) => {
 
 router.get("/:memberAccount/submissions", async (request, response) => {
   const memberAccount = request.params.memberAccount;
+  var submissionsWithComments = null;
 
   try {
 
@@ -130,9 +130,25 @@ router.get("/:memberAccount/submissions", async (request, response) => {
         const memberID = memberData.memberID;
         const submissions = await getSubmissionsByMember(memberID);
 
-        
         if (submissions) {
-          response.status(200).json(submissions);
+          submissionsWithComments = await Promise.all(
+            submissions.map(async (submission) => {
+              const comments = await getCommentsByReviewID(submission.reviewID);
+  
+              const uniqueMemberAccounts = [...new Set(comments.map(comment => comment.member_account))];
+  
+              return {
+                ...submission,
+                userLogs: uniqueMemberAccounts
+              };
+            })
+          );
+        } else {
+          submissionsWithComments = submissions;
+        }
+        
+        if (submissionsWithComments) {
+          response.status(200).json(submissionsWithComments);
         } else {
           response.status(404).json({ message: "No hay ninguna submission.", memberAccount });
         }
@@ -145,6 +161,7 @@ router.get("/:memberAccount/submissions", async (request, response) => {
 
 router.get("/:memberAccount/reviews", async (request, response) => {
   const memberAccount = request.params.memberAccount;
+  var reviewsWithComments = null;
 
   try {
 
@@ -170,10 +187,27 @@ router.get("/:memberAccount/reviews", async (request, response) => {
         } else {
           reviews = await getReviews(memberID);
         }
-        
+
         if (reviews) {
-          console.log(reviews);
-          response.status(200).json(reviews);
+          reviewsWithComments = await Promise.all(
+            reviews.map(async (review) => {
+              const comments = await getCommentsByReviewID(review.reviewID);
+  
+              const uniqueMemberAccounts = [...new Set(comments.map(comment => comment.member_account))];
+  
+              return {
+                ...review,
+                userLogs: uniqueMemberAccounts
+              };
+            })
+          );
+        } else {
+          reviewsWithComments = reviews;
+        }
+        
+        
+        if (reviewsWithComments) {
+          response.status(200).json(reviewsWithComments);
         } else {
           response.status(404).json({ message: "No hay ninguna review.", memberAccount });
         }
