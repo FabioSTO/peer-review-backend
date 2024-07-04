@@ -432,7 +432,7 @@ async function insertReviewTags(tags, reviewID) {
 
 async function getSubmissionsByMember(memberID) {
   return new Promise((resolve, reject) => {
-    const selectQuery = "SELECT reviewID, member_account, taskname, proname, orgname, r.taskID, p.proID, o.orgID, reviewtitle, review_desc, review_scope, review_content, review_content_type, review_image, review_date, is_closed, review_owner from review r JOIN task t on r.taskID=t.taskID JOIN project p on t.proID=p.proID JOIN organization o on p.orgID=o.orgID JOIN gitmember g on r.review_owner = g.memberID where review_owner = ?;";
+    const selectQuery = "SELECT reviewID, member_account, taskname, proname, orgname, r.taskID, p.proID, o.orgID, reviewtitle, review_desc, review_scope, review_content, review_content_type, review_image, review_date, is_closed, review_owner from review r JOIN task t on r.taskID=t.taskID JOIN project p on t.proID=p.proID JOIN organization o on p.orgID=o.orgID JOIN gitmember g on r.review_owner = g.memberID where review_owner = ? AND r.is_closed != 1;";
     
     con.query(selectQuery, [memberID], (err, rows) => {
       if (err) {
@@ -694,6 +694,19 @@ async function getCommentsByReviewID(reviewID) {
   });
 }
 
+async function closeReview(reviewID) {
+  return new Promise((resolve, reject) => {
+    const insertCommentQuery = "UPDATE review SET is_closed = true where reviewID = ?"
+    con.query(insertCommentQuery, [reviewID], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.affectedRows); 
+      }
+    });
+  });
+};
+
 module.exports = {
   getGitMemberAccountAndMemberTokenByUserID,
   getOrgIDsByOrgName,
@@ -725,6 +738,7 @@ module.exports = {
   insertComment,
   getCommentsByReviewID,
   getMemberRoles,
-  updateMemberRoles
+  updateMemberRoles,
+  closeReview
 };
 

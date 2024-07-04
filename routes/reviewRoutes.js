@@ -6,7 +6,7 @@ const con = require("../db");
 
 const jwt = require('jsonwebtoken');
 
-const { insertComment, getMemberDataByMemberAccount, getCommentsByReviewID } = require('../databaseQueries')
+const { insertComment, getMemberDataByMemberAccount, getCommentsByReviewID, closeReview } = require('../databaseQueries')
 
 const jwt_secret_key = config.jwtConfig.jwtToken;
 
@@ -55,6 +55,25 @@ router.get("/:reviewID/comments", async (request, response) => {
   } catch (error) {
     response.status(500).json({ message: "Error al obtener los comentarios." });
   }
+});
+
+router.put("/:reviewID/close", async (request, response) => {
+  const reviewID = request.params.reviewID;
+
+  try {
+    const token = request.headers.authorization.split(' ')[1];
+
+    jwt.verify(token, jwt_secret_key, async (err, decodedToken) => {
+      if (err) {
+        return response.status(401).json({ message: 'Token inválido' });
+      } else {
+        await closeReview(reviewID);
+        return response.status(200).json({ message: "Review cerrada", reviewID });
+      }
+    });
+  } catch (error) {
+    response.status(500).json({ message: "Hubo un error al añadir la tarea", error });
+}
 });
 
 module.exports = router;

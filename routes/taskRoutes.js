@@ -4,6 +4,20 @@ const router = express.Router();
 const config = require("../config");
 const con = require("../db");
 
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // Nombre único para cada archivo
+  }
+});
+
+const upload = multer({ storage });
+
 const jwt = require('jsonwebtoken');
 
 const { getMembersByTaskID, insertMemberInTask, getMemberDataByMemberAccount, insertReview, insertReviewTags } = require('../databaseQueries')
@@ -52,9 +66,12 @@ router.post("/:taskID/gitmembers", async (request, response) => {
   }
 });
 
-router.post("/:taskID/reviews", async (request, response) => {
+router.post("/:taskID/reviews", upload.single('image'), async (request, response) => {
   const taskID = request.params.taskID;
-  const { title, desc, scope, tags, image, reviewContent, contentType, member } = request.body;
+  const { title, desc, scope, reviewContent, contentType} = request.body;
+  const tags = JSON.parse(request.body.tags); // Convertir tags de JSON string a objeto
+  const member = JSON.parse(request.body.member); // Convertir member de JSON string a objeto
+  const image = request.file ? `/uploads/${request.file.filename}` : null; // Ruta de la imagen subida
 
   try {
     const token = request.headers.authorization.split(' ')[1];

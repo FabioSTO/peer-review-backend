@@ -268,7 +268,7 @@ router.get("/:memberAccount/projects/:proName/roles", async (request, response) 
   }
 });
 
-router.post("/:memberAccount/projects/:proName/roles", async (request, response) => {
+router.put("/:memberAccount/projects/:proName/roles", async (request, response) => {
   const memberAccount = request.params.memberAccount;
   const proName = request.params.proName;
   const {isAdmin, isRevOrSuperRev} = request.body;
@@ -292,7 +292,7 @@ router.post("/:memberAccount/projects/:proName/roles", async (request, response)
 }
 });
 
-router.post("/:memberAccount/organizations/:orgName/roles", async (request, response) => {
+router.put("/:memberAccount/organizations/:orgName/roles", async (request, response) => {
   const memberAccount = request.params.memberAccount;
   const orgName = request.params.orgName;
   const {isAdmin, isRevOrSuperRev} = request.body;
