@@ -66,6 +66,44 @@ async function getMemberDataByMemberAccount(member_account) {
   });
 };
 
+async function getMemberRoles(member_id, entityName, isOrg) {
+  let getRolesQuery = "";
+  return new Promise((resolve, reject) => {
+    if (isOrg) {
+      getRolesQuery = "SELECT is_owner, is_admin, is_super_reviewer from organization_member om LEFT JOIN organization o on o.orgID=om.orgID WHERE memberID = ? AND orgname = ?";
+    } else {
+      getRolesQuery = "SELECT is_admin, is_reviewer from project_member pm LEFT JOIN project p on p.proID=pm.proID WHERE memberID = ? AND proname = ?";
+    }
+    
+    con.query(getRolesQuery, [member_id, entityName], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows[0]); 
+      }
+    });
+  });
+};
+
+async function updateMemberRoles(member_id, entityName, isOrg, is_admin, is_rev_or_super_rev) {
+  let updateRolesQuery = "";
+  return new Promise((resolve, reject) => {
+    if (isOrg) {
+      updateRolesQuery = "UPDATE organization_member om SET om.is_admin = ?, om.is_super_reviewer = ? WHERE om.memberID = ? AND om.orgID = (SELECT o.orgID FROM organization o WHERE o.orgname = ?)";
+    } else {
+      updateRolesQuery = "UPDATE project_member pm SET pm.is_admin = ?, pm.is_reviewer = ? WHERE pm.memberID = ? AND pm.proID = (SELECT p.proID FROM project p WHERE p.proname = ?)";
+    }
+    
+    con.query(updateRolesQuery, [is_admin, is_rev_or_super_rev, member_id, entityName], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId); 
+      }
+    });
+  });
+};
+
 async function getIsOwnerByOrgNameAndMemberID(orgName, member_id) {
   return new Promise((resolve, reject) => {
     const selectQuery = "SELECT is_owner, r.orgID, orgname FROM organization_member r JOIN organization o ON r.orgID = o.orgID WHERE memberID = ? AND orgname = ? AND is_owner = TRUE;";
@@ -685,6 +723,8 @@ module.exports = {
   getSuperReviewedReviews,
   getReviews,
   insertComment,
-  getCommentsByReviewID
+  getCommentsByReviewID,
+  getMemberRoles,
+  updateMemberRoles
 };
 

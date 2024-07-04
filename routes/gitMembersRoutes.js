@@ -7,7 +7,7 @@ const con = require("../db");
 const jwt = require('jsonwebtoken');
 
 const { getMemberDataByMemberAccount, getSubmissionsByMember, getSuperReviewedOrganizationsByMemberID, getUserTagsByMemberID, getSuperReviewedReviews,
-  getReviews, getCommentsByReviewID } = require('../databaseQueries')
+  getReviews, getCommentsByReviewID, getMemberRoles, updateMemberRoles } = require('../databaseQueries')
 
 const jwt_secret_key = config.jwtConfig.jwtToken;
 
@@ -218,5 +218,102 @@ router.get("/:memberAccount/reviews", async (request, response) => {
   }
 });
 
+router.get("/:memberAccount/organizations/:orgName/roles", async (request, response) => {
+  const memberAccount = request.params.memberAccount;
+  const orgName = request.params.orgName;
+
+  try {
+
+    const token = request.headers.authorization.split(' ')[1];
+
+    jwt.verify(token, jwt_secret_key, async (err, decodedToken) => {
+      if (err) {
+        return response.status(401).json({ message: 'Token inválido' });
+      } else {
+        const memberData = await getMemberDataByMemberAccount(memberAccount);
+        const memberID = memberData.memberID;
+
+        const roles = await getMemberRoles(memberID, orgName, true); // IsOrg a true
+        response.status(200).json(roles);
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ message: "Error al obtener las entries del miembro." });
+  }
+});
+
+router.get("/:memberAccount/projects/:proName/roles", async (request, response) => {
+  const memberAccount = request.params.memberAccount;
+  const proName = request.params.proName;
+
+  try {
+
+    const token = request.headers.authorization.split(' ')[1];
+
+    jwt.verify(token, jwt_secret_key, async (err, decodedToken) => {
+      if (err) {
+        return response.status(401).json({ message: 'Token inválido' });
+      } else {
+        const memberData = await getMemberDataByMemberAccount(memberAccount);
+        const memberID = memberData.memberID;
+
+        const roles = await getMemberRoles(memberID, proName, false); // IsOrg a false
+        response.status(200).json(roles);
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    response.status(500).json({ message: "Error al obtener las entries del miembro." });
+  }
+});
+
+router.post("/:memberAccount/projects/:proName/roles", async (request, response) => {
+  const memberAccount = request.params.memberAccount;
+  const proName = request.params.proName;
+  const {isAdmin, isRevOrSuperRev} = request.body;
+
+  try {
+    const token = request.headers.authorization.split(' ')[1];
+
+    jwt.verify(token, jwt_secret_key, async (err, decodedToken) => {
+      if (err) {
+        return response.status(401).json({ message: 'Token inválido' });
+      } else {
+        const memberData = await getMemberDataByMemberAccount(memberAccount);
+        const memberID = memberData.memberID;
+
+        await updateMemberRoles(memberID, proName, false, isAdmin, isRevOrSuperRev);
+        return response.status(200).json({ message: "Roles actualizados con éxito", memberAccount });
+      }
+    });
+  } catch (error) {
+    response.status(500).json({ message: "Hubo un error al actualizar roles", error });
+}
+});
+
+router.post("/:memberAccount/organizations/:orgName/roles", async (request, response) => {
+  const memberAccount = request.params.memberAccount;
+  const orgName = request.params.orgName;
+  const {isAdmin, isRevOrSuperRev} = request.body;
+
+  try {
+    const token = request.headers.authorization.split(' ')[1];
+
+    jwt.verify(token, jwt_secret_key, async (err, decodedToken) => {
+      if (err) {
+        return response.status(401).json({ message: 'Token inválido' });
+      } else {
+        const memberData = await getMemberDataByMemberAccount(memberAccount);
+        const memberID = memberData.memberID;
+
+        await updateMemberRoles(memberID, orgName, true, isAdmin, isRevOrSuperRev);
+        return response.status(200).json({ message: "Roles actualizados con éxito", memberAccount });
+      }
+    });
+  } catch (error) {
+    response.status(500).json({ message: "Hubo un error al actualizar roles", error });
+}
+});
 
 module.exports = router;

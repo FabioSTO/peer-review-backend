@@ -66,7 +66,7 @@ router.get("/:userID", async (request, response) => {
       }
     });
   } catch (error) {
-    response.status(500).json({ message: "Hubo un error al añadir la organización", error });
+    response.status(500).json({ message: "Hubo un error al obetner las organizaciones", error });
   }
 });
 
