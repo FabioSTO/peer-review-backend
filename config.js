@@ -14,5 +14,8 @@ module.exports = {
   },
   jwtConfig: {
     jwtToken: process.env.JWT_SECRET_KEY || "<JWT Secret Key>",
+  },
+  huggingFaceConfig: {
+    huggingFaceKey: process.env.HUGGING_FACE_SECRET_KEY || "<Hugging Face Secret Key>",
   }
 };

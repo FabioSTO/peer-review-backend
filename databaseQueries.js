@@ -397,6 +397,45 @@ async function getMembersByTaskID(taskID) {
   });
 }
 
+async function editTask(taskID, taskName, taskDesc, taskState) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "UPDATE task SET taskname = ?, task_desc = ?, task_state = ? where taskID = ?";
+    con.query(selectQuery, [taskName, taskDesc, taskState, taskID], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId);
+      };
+    });
+  });
+}
+
+async function insertUpdate(memberID, taskID, taskUpdate) {
+  return new Promise((resolve, reject) => {
+    const insertUpdateQuery = "INSERT INTO task_update (update_owner, update_content, taskID, update_date) VALUES (?, ?, ?, NOW())"
+    con.query(insertUpdateQuery, [memberID, taskUpdate, taskID], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId); 
+      }
+    });
+  });
+};
+
+async function getUpdatesByTaskID(taskID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT update_owner, member_account, update_content, update_date FROM task_update c JOIN task r on c.taskID = r.taskID JOIN gitmember g on c.update_owner = g.memberID WHERE c.taskID = ? ORDER BY update_date ASC;";
+    con.query(selectQuery, [taskID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows.reverse());
+      };
+    });
+  });
+}
+
 ///////////////////////////// REVIEWS ///////////////////////////////
 
 async function insertReview(taskID, title, desc, scope, image, reviewContent, contentType, memberID) {
@@ -666,6 +705,48 @@ async function getReviews(memberID) {
   });
 }
 
+async function insertPending(memberID, reviewID) {
+  return new Promise((resolve, reject) => {
+    const insertPending = "INSERT INTO review_member (memberID, reviewID) VALUES (?, ?)"
+    con.query(insertPending, [memberID, reviewID], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId); 
+      }
+    });
+  });
+};
+
+async function updatePending(memberID, reviewID, state) {
+  return new Promise((resolve, reject) => {
+    let insertPending = "UPDATE review_member SET pending = ? where memberID = ? AND reviewID = ?";
+    if (state) {
+      insertPending = "UPDATE review_member SET pending = ? where memberID != ? AND reviewID = ?";
+    } 
+    con.query(insertPending, [state, memberID, reviewID], (err, result) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(result.insertId); 
+      }
+    });
+  });
+};
+
+async function getPending(memberID, reviewID) {
+  return new Promise((resolve, reject) => {
+    const insertPending = "SELECT pending from review_member where memberID = ? AND reviewID = ?"
+    con.query(insertPending, [memberID, reviewID], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row); 
+      }
+    });
+  });
+};
+
 ///////////////////////////// COMMENTS ///////////////////////////////
 
 async function insertComment(memberID, reviewID, comment) {
@@ -689,6 +770,19 @@ async function getCommentsByReviewID(reviewID) {
         reject(err);
       } else {
         resolve(rows.reverse());
+      };
+    });
+  });
+}
+
+async function getReviewByReviewID(reviewID) {
+  return new Promise((resolve, reject) => {
+    const selectQuery = "SELECT reviewtitle, review_desc, review_content FROM review r WHERE r.reviewID = ?;";
+    con.query(selectQuery, [reviewID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
       };
     });
   });
@@ -739,6 +833,13 @@ module.exports = {
   getCommentsByReviewID,
   getMemberRoles,
   updateMemberRoles,
-  closeReview
+  closeReview,
+  editTask,
+  insertPending,
+  updatePending,
+  getPending,
+  getUpdatesByTaskID,
+  insertUpdate,
+  getReviewByReviewID
 };
 

@@ -7,12 +7,13 @@ const con = require("../db");
 const jwt = require('jsonwebtoken');
 
 const { getMemberDataByMemberAccount, getSubmissionsByMember, getSuperReviewedOrganizationsByMemberID, getUserTagsByMemberID, getSuperReviewedReviews,
-  getReviews, getCommentsByReviewID, getMemberRoles, updateMemberRoles } = require('../databaseQueries')
+  getReviews, getCommentsByReviewID, getMemberRoles, updateMemberRoles, getPending } = require('../databaseQueries')
 
 const jwt_secret_key = config.jwtConfig.jwtToken;
 
 router.get("/:memberAccount/repositories", async (request, response) => {
   const memberAccount = request.params.memberAccount;
+  let commitDescriptions = null;
   
   try {
 
@@ -33,78 +34,80 @@ router.get("/:memberAccount/repositories", async (request, response) => {
 
         const repos = await getRepositories.json();
 
-        const getBranchesPromises = repos.map(async repo => {
-          const branchesUrl = (repo.branches_url).replace('{/branch}', '');
-          const branchesResponse = await fetch(branchesUrl, {
-            headers: {
-              'Authorization': `token ${memberToken}`,
-              'Accept': 'application/vnd.github.v3+json'
-            }
-          });
-          const branches = await branchesResponse.json();
-
-          const branchCommitsPromises = branches.map(async branch => {
-            const commitsUrl = `https://api.github.com/repos/${memberAccount}/${repo.name}/commits?sha=${branch.name}&per_page=5`;
-            const commitsResponse = await fetch(commitsUrl, {
+        if (Array.isArray(repos) && repos.length > 0) {
+          const getBranchesPromises = repos.map(async repo => {
+            const branchesUrl = (repo.branches_url).replace('{/branch}', '');
+            const branchesResponse = await fetch(branchesUrl, {
               headers: {
                 'Authorization': `token ${memberToken}`,
                 'Accept': 'application/vnd.github.v3+json'
               }
             });
-            const commits = await commitsResponse.json();
-
-            const commitDetailsPromises = commits.map(async commit => {
-              const commitUrl = `https://api.github.com/repos/${memberAccount}/${repo.name}/commits/${commit.sha}`;
-              const commitDetailResponse = await fetch(commitUrl, {
+            const branches = await branchesResponse.json();
+  
+            const branchCommitsPromises = branches.map(async branch => {
+              const commitsUrl = `https://api.github.com/repos/${memberAccount}/${repo.name}/commits?sha=${branch.name}&per_page=5`;
+              const commitsResponse = await fetch(commitsUrl, {
                 headers: {
                   'Authorization': `token ${memberToken}`,
                   'Accept': 'application/vnd.github.v3+json'
                 }
               });
-              const commitDetail = await commitDetailResponse.json();
-
-              const files = commitDetail.files.map(file => ({
-                status: file.status,
-                filename: file.filename,
-                patch: file.patch
-              }));
-
-              return {
-                sha: commit.sha,
-                message: commitDetail.commit.message,
-                author: commitDetail.commit.author.name,
-                date: commitDetail.commit.author.date,
-                files: files
-              };
+              const commits = await commitsResponse.json();
+  
+              const commitDetailsPromises = commits.map(async commit => {
+                const commitUrl = `https://api.github.com/repos/${memberAccount}/${repo.name}/commits/${commit.sha}`;
+                const commitDetailResponse = await fetch(commitUrl, {
+                  headers: {
+                    'Authorization': `token ${memberToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                  }
+                });
+                const commitDetail = await commitDetailResponse.json();
+  
+                const files = commitDetail.files.map(file => ({
+                  status: file.status,
+                  filename: file.filename,
+                  patch: file.patch
+                }));
+  
+                return {
+                  sha: commit.sha,
+                  message: commitDetail.commit.message,
+                  author: commitDetail.commit.author.name,
+                  date: commitDetail.commit.author.date,
+                  files: files
+                };
+              });
+  
+              const detailedCommits = await Promise.all(commitDetailsPromises);
+              return { branchName: branch.name, commits: detailedCommits };
             });
-
-            const detailedCommits = await Promise.all(commitDetailsPromises);
-            return { branchName: branch.name, commits: detailedCommits };
+  
+            const branchCommits = await Promise.all(branchCommitsPromises);
+            return { repoName: repo.name, branches: branchCommits };
           });
 
-          const branchCommits = await Promise.all(branchCommitsPromises);
-          return { repoName: repo.name, branches: branchCommits };
-        });
+          const branchesResponses = await Promise.all(getBranchesPromises);
 
-        const branchesResponses = await Promise.all(getBranchesPromises);
-
-        const commitDescriptions = branchesResponses.map(commit => {
-          return {
-            repoName: commit.repoName,
-            branches: commit.branches.map(branch => {
-              return {
-                branchName: branch.branchName,
-                commits: branch.commits.map(commit => ({
-                  sha: commit.sha,
-                  message: commit.message,
-                  author: commit.author,
-                  date: commit.date,
-                  files: commit.files
-                }))
-              };
-            })
-          };
-        })
+          commitDescriptions = branchesResponses.map(commit => {
+            return {
+              repoName: commit.repoName,
+              branches: commit.branches.map(branch => {
+                return {
+                  branchName: branch.branchName,
+                  commits: branch.commits.map(commit => ({
+                    sha: commit.sha,
+                    message: commit.message,
+                    author: commit.author,
+                    date: commit.date,
+                    files: commit.files
+                  }))
+                };
+              })
+            };
+          })
+        }
 
         response.status(200).json(commitDescriptions);
       }
@@ -134,12 +137,15 @@ router.get("/:memberAccount/submissions", async (request, response) => {
           submissionsWithComments = await Promise.all(
             submissions.map(async (submission) => {
               const comments = await getCommentsByReviewID(submission.reviewID);
+
+              const pending = await getPending(memberID, submission.reviewID);
   
               const uniqueMemberAccounts = [...new Set(comments.map(comment => comment.member_account))];
-  
+
               return {
                 ...submission,
-                userLogs: uniqueMemberAccounts
+                userLogs: uniqueMemberAccounts,
+                pending: pending.length>0 ? pending[0].pending : 0
               };
             })
           );
@@ -148,6 +154,7 @@ router.get("/:memberAccount/submissions", async (request, response) => {
         }
         
         if (submissionsWithComments) {
+          submissionsWithComments.sort((a, b) => b.pending - a.pending);
           response.status(200).json(submissionsWithComments);
         } else {
           response.status(404).json({ message: "No hay ninguna submission.", memberAccount });
@@ -193,11 +200,14 @@ router.get("/:memberAccount/reviews", async (request, response) => {
             reviews.map(async (review) => {
               const comments = await getCommentsByReviewID(review.reviewID);
   
+              const pending = await getPending(memberID, review.reviewID);
+
               const uniqueMemberAccounts = [...new Set(comments.map(comment => comment.member_account))];
-  
+
               return {
                 ...review,
-                userLogs: uniqueMemberAccounts
+                userLogs: uniqueMemberAccounts,
+                pending: pending.length>0 ? pending[0].pending : 0
               };
             })
           );
@@ -207,6 +217,7 @@ router.get("/:memberAccount/reviews", async (request, response) => {
         
         
         if (reviewsWithComments) {
+          reviewsWithComments.sort((a, b) => b.pending - a.pending);
           response.status(200).json(reviewsWithComments);
         } else {
           response.status(404).json({ message: "No hay ninguna review.", memberAccount });
